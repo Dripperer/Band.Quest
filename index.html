@@ -1,27 +1,99 @@
-async function login() {
-    const username = document.getElementById('username').value;
-    const password = document.getElementById('password').value;
-  
-    try {
-      const response = await fetch('/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ username, password })
-      });
-  
-      if (response.ok) {
-        // Successful login, redirect to the question list or other appropriate action
-        window.location.href = '/questions';
-      } else {
-        // Handle login failure, display an error message
-        document.getElementById('login-error').textContent = 'Invalid username or password';
-      }
-    } catch (error) {
-      console.error('Login error:', error);
-      document.getElementById('login-error').textContent = 'An error occurred during login';
-    }
-  }
-  
-  // ... other functions ...
+from flask import Flask, request, jsonify
+import json
+
+app = Flask(__name__)
+
+# Database (sostituisci con il tuo database o una libreria di gestione dati)
+users = {"utente": {"password": "password"}}
+questions = [
+    {"question": "Qual è il colore del cielo?",
+     "answers": ["Blu", "Verde", "Rosso"],
+     "correct": "Blu"},
+    # ... altre domande ...
+]
+leaderboard = []  # (verrà popolato con i dati provenienti dal tuo database)
+
+# Funzioni di autenticazione
+def is_valid_user(username, password):
+    return username in users and users[username]["password"] == password
+
+def get_user_data(username):
+    return users.get(username)
+
+# Funzioni per la gestione delle domande
+def get_questions():
+    return questions
+
+def get_question(index):
+    return questions[index]
+
+# Funzioni per la gestione del quiz
+def check_answer(question_index, user_answer):
+    correct_answer = questions[question_index]["correct"]
+    return user_answer == correct_answer
+
+def add_points(username, points):
+    # Aggiorna il punteggio dell'utente nel database
+    user_data = get_user_data(username)
+    user_data["points"] = user_data.get("points", 0) + points
+
+# Funzioni per la gestione dei video
+def submit_videos(username, video_links):
+    # Salva i link dei video da qualche parte (ad esempio, nel database)
+    # ... (implementazione della logica di salvataggio) ...
+    add_points(username, len(video_links) * 5)
+    return True  # (modifica in base alla tua implementazione)
+
+# Funzioni per la classifica
+def get_leaderboard():
+    # Recupera i dati della classifica dal database
+    # ... (implementazione della logica di recupero) ...
+    return leaderboard
+
+# Rotte per l'API
+@app.route("/login", methods=["POST"])
+def login():
+    username = request.form["username"]
+    password = request.form["password"]
+
+    if is_valid_user(username, password):
+        return jsonify({"success": True})
+    else:
+        return jsonify({"success": False})
+
+@app.route("/quiz")
+def get_quiz_data():
+    return jsonify({"questions": get_questions()})
+
+@app.route("/check_answer", methods=["POST"])
+def check_user_answer():
+    question_index = int(request.form["question_index"])
+    user_answer = request.form["user_answer"]
+    username = request.headers.get("username")  # (recupera username dall'header)
+
+    if check_answer(question_index, user_answer):
+        add_points(username, 10)
+        return jsonify({"correct": True})
+    else:
+        return jsonify({"correct": False})
+
+@app.route("/add_points", methods=["POST"])
+def add_user_points():
+    username = request.headers.get("username")  # (recupera username dall'header)
+    points = int(request.form["points"])
+    add_points(username, points)
+    return "", 204  # No Content
+
+@app.route("/submit_videos", methods=["POST"])
+def submit_user_videos():
+    username = request.headers.get("username")  # (recupera username dall'header)
+    video_links = json.loads(request.data)["videos"]
+    success = submit_videos(username, video_links)
+    return jsonify({"success": success})
+
+@app.route("/leaderboard")
+def get_leaderboard_data():
+    return jsonify(get_leaderboard())
+
+if __name__ == "__main__":
+    app.run(debug=True)
